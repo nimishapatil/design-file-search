@@ -1,0 +1,25 @@
+# Virtual environment
+clip-env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Database files (optional - you might want to include these)
+database/
+
+# API keys and secrets
+*.env
+config.py
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large model files (if any get downloaded locally)
+*.safetensors
+pytorch_model.bin
+
+# Test images (optional - might be large)
+test-images/
