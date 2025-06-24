@@ -74,7 +74,7 @@ def scan_images():
     
     # Load the CLIP model (this will download ~600MB the first time)
     print("📥 Loading CLIP model (this may take a moment the first time)...")
-    model_name = "openai/clip-vit-base-patch32"  # Smaller, faster model
+    model_name = "openai/clip-vit-large-patch14"  # Larger, more accurate model
     
     try:
         model = CLIPModel.from_pretrained(model_name)
