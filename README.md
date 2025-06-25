@@ -10,10 +10,12 @@ Add image similarity search to your app in minutes. Perfect for design tools, as
 
 ### 1. Start the API
 ```bash
-git clone [your-repo-url]
+```bash
+git clone [repo-url]
 cd design-search
 source clip-env/bin/activate
-uvicorn scripts.main-byom:app --reload --port 8080
+cd scripts
+uvicorn main-byom:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 ### 2. Test It
