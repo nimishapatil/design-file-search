@@ -155,7 +155,6 @@ function ImageSearch({ collectionId }) {
 
 Found a bug or have feedback? We'd love to hear from you!
 
-- **GitHub Issues**: [Create an issue](https://github.com/your-repo/issues)
 - **Email**: hello@swirlypeak.com
 
 ---
