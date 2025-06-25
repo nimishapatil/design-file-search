@@ -23,3 +23,5 @@ pytorch_model.bin
 
 # Test images (optional - might be large)
 test-images/
+# Load testing images (too large for git)
+load-testing/load-test-data/
