@@ -63,7 +63,6 @@ class Collection(BaseModel):
     name: str
     description: Optional[str] = ""
     model: ModelConfig
-
 class ModelInfo(BaseModel):
     name: str
     type: str
@@ -77,6 +76,16 @@ class SearchResult(BaseModel):
     similarity: float
     collection_id: str
 
+class TextSearchRequest(BaseModel):
+    query: str
+    top_k: Optional[int] = 5
+
+class TextSearchResponse(BaseModel):
+    results: List[SearchResult]
+    total_searched: int
+    query_time_ms: float
+    model_used: str
+    query_text: str
 class SearchResponse(BaseModel):
     results: List[SearchResult]
     total_searched: int
@@ -189,7 +198,65 @@ class ModelManager:
             return self.get_openai_embedding(model_config.api_key, image)
         else:
             raise ValueError(f"Unknown model type: {model_config.type}")
+        
+    def get_text_embedding(self, model_config: ModelConfig, text: str) -> List[float]:
+        """Get embedding for text using specified model configuration"""
+        if model_config.type == "builtin":
+            return self.get_builtin_text_embedding(model_config.name, text)
+        elif model_config.type == "endpoint":
+            return self.get_endpoint_text_embedding(model_config.endpoint, model_config.api_key, text)
+        elif model_config.type == "openai":
+            return self.get_openai_text_embedding(model_config.api_key, text)
+        else:
+            raise ValueError(f"Unknown model type: {model_config.type}")
 
+    def get_builtin_text_embedding(self, model_name: str, text: str) -> List[float]:
+        """Get text embedding from built-in CLIP model"""
+        model_data = self.load_builtin_model(model_name)
+        model = model_data["model"]
+        processor = model_data["processor"]
+
+        # Process text for CLIP
+        inputs = processor(text=[text], return_tensors="pt", padding=True)
+
+        with torch.no_grad():
+            text_features = model.get_text_features(**inputs)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+        return text_features.squeeze().numpy().tolist()
+
+    def get_endpoint_text_embedding(self, endpoint: str, api_key: str, text: str) -> List[float]:
+        """Get text embedding from external endpoint"""
+        # Call external endpoint for text
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        payload = {
+            "text": text,
+            "type": "text"
+        }
+
+        try:
+            response = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+
+            # Expected response format: {"embedding": [0.1, 0.2, ...]}
+            if "embedding" not in result:
+                raise ValueError("External model must return {'embedding': [...]}" )
+
+            return result["embedding"]
+
+        except requests.RequestException as e:
+            raise HTTPException(status_code=500, detail=f"External model error: {str(e)}")
+
+    def get_openai_text_embedding(self, api_key: str, text: str) -> List[float]:
+        """Get text embedding from OpenAI (placeholder for future)"""
+        # This would integrate with OpenAI's text embedding API when available
+        raise HTTPException(status_code=501, detail="OpenAI text integration coming soon")
+
+# Initialize model manager
 model_manager = ModelManager()
 
 # Database functions
@@ -378,6 +445,155 @@ async def add_image_to_collection(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
+@app.post("/collections/{collection_id}/images/batch")
+async def add_multiple_images_to_collection(
+    collection_id: str,
+    files: List[UploadFile] = File(...),
+    user: dict = Depends(verify_api_key)
+):
+    """Add multiple images to a collection at once"""
+    # Verify collection
+    if collection_id not in database['collections']:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    
+    collection = database['collections'][collection_id]
+    if collection.get("user") != user["name"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Validate all files are images
+    for file in files:
+        if not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail=f"File {file.filename} must be an image")
+    
+    results = []
+    successful_uploads = 0
+    model_config = ModelConfig(**collection["model"])
+    
+    for file in files:
+        try:
+            # Process image
+            contents = await file.read()
+            image = Image.open(BytesIO(contents))
+            embedding = model_manager.get_embedding(model_config, image)
+            
+            # Create image record
+            image_id = str(uuid.uuid4())
+            image_record = {
+                "id": image_id,
+                "filename": file.filename,
+                "collection_id": collection_id,
+                "embedding": embedding,
+                "upload_date": datetime.now().isoformat(),
+                "user": user["name"],
+                "model": collection["model"]
+            }
+            
+            database['images'][image_id] = image_record
+            successful_uploads += 1
+            
+            results.append({
+                "filename": file.filename,
+                "image_id": image_id,
+                "status": "success"
+            })
+            
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "status": "failed",
+                "error": str(e)
+            })
+    
+    # Update collection image count
+    database['collections'][collection_id]['image_count'] += successful_uploads
+    save_database()
+    
+    return {
+        "message": f"Batch upload completed: {successful_uploads}/{len(files)} images successful",
+        "collection_id": collection_id,
+        "total_attempted": len(files),
+        "successful_uploads": successful_uploads,
+        "failed_uploads": len(files) - successful_uploads,
+        "results": results
+    }
+
+class BatchUploadFromUrls(BaseModel):
+    urls: List[str]
+
+@app.post("/collections/{collection_id}/images/batch-from-urls")
+async def add_images_from_urls(
+    collection_id: str,
+    request: BatchUploadFromUrls,
+    user: dict = Depends(verify_api_key)
+):
+    """Add multiple images to a collection from URLs"""
+    # Verify collection
+    if collection_id not in database['collections']:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    
+    collection = database['collections'][collection_id]
+    if collection.get("user") != user["name"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    results = []
+    successful_uploads = 0
+    model_config = ModelConfig(**collection["model"])
+    
+    for url in request.urls:
+        try:
+            # Download image from URL
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            # Process image
+            image = Image.open(BytesIO(response.content))
+            embedding = model_manager.get_embedding(model_config, image)
+            
+            # Create image record
+            image_id = str(uuid.uuid4())
+            filename = url.split('/')[-1] or f"image_{image_id[:8]}.jpg"
+            
+            image_record = {
+                "id": image_id,
+                "filename": filename,
+                "collection_id": collection_id,
+                "embedding": embedding,
+                "upload_date": datetime.now().isoformat(),
+                "user": user["name"],
+                "model": collection["model"],
+                "source_url": url
+            }
+            
+            database['images'][image_id] = image_record
+            successful_uploads += 1
+            
+            results.append({
+                "url": url,
+                "filename": filename,
+                "image_id": image_id,
+                "status": "success"
+            })
+            
+        except Exception as e:
+            results.append({
+                "url": url,
+                "status": "failed",
+                "error": str(e)
+            })
+    
+    # Update collection image count
+    database['collections'][collection_id]['image_count'] += successful_uploads
+    save_database()
+    
+    return {
+        "message": f"Batch URL upload completed: {successful_uploads}/{len(request.urls)} images successful",
+        "collection_id": collection_id,
+        "total_attempted": len(request.urls),
+        "successful_uploads": successful_uploads,
+        "failed_uploads": len(request.urls) - successful_uploads,
+        "results": results
+    }
+
 @app.post("/collections/{collection_id}/search", response_model=SearchResponse)
 async def search_similar_images(
     collection_id: str,
@@ -435,6 +651,61 @@ async def search_similar_images(
             total_searched=len(collection_images),
             query_time_ms=round(query_time, 2),
             model_used=model_name
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error searching images: {str(e)}")
+
+@app.post("/collections/{collection_id}/search-text", response_model=TextSearchResponse)
+async def search_similar_images_by_text(
+    collection_id: str,
+    request: TextSearchRequest,
+    user: dict = Depends(verify_api_key)
+):
+    """Search for images using text query"""
+    import time
+    start_time = time.time()
+    
+    # Verify collection
+    if collection_id not in database['collections']:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    
+    collection = database['collections'][collection_id]
+    if collection.get("user") != user["name"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    try:
+        # Get text embedding using collection's model
+        model_config = ModelConfig(**collection["model"])
+        query_embedding = model_manager.get_text_embedding(model_config, request.query)
+        
+        # Find similar images
+        similarities = []
+        collection_images = [img for img in database['images'].values() 
+                           if img.get('collection_id') == collection_id]
+        
+        for image_data in collection_images:
+            similarity = cosine_similarity(query_embedding, image_data['embedding'])
+            similarities.append({
+                'image_id': image_data['id'],
+                'filename': image_data['filename'],
+                'similarity': similarity,
+                'collection_id': collection_id
+            })
+        
+        # Sort and return top results
+        similarities.sort(key=lambda x: x['similarity'], reverse=True)
+        results = similarities[:request.top_k]
+        query_time = (time.time() - start_time) * 1000
+        
+        model_name = f"{model_config.type}:{model_config.name or model_config.endpoint}"
+        
+        return TextSearchResponse(
+            results=[SearchResult(**result) for result in results],
+            total_searched=len(collection_images),
+            query_time_ms=round(query_time, 2),
+            model_used=model_name,
+            query_text=request.query
         )
         
     except Exception as e:
