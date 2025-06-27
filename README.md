@@ -1,39 +1,57 @@
-# AI-Powered Search API
+# AI-Powered Visual Search API
 
-> Add intelligent image and text search to your app in minutes
+> Add intelligent image and text search to your applications in minutes
 
-Transform any application with AI-powered search that works with both images and text queries. Perfect for e-commerce, design tools, asset management, and content discovery.
+Transform any application with AI-powered search that works with both images and text queries. Perfect for design tools, e-commerce, asset management, and creative applications.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Start the API
+### 1. Setup Environment
 ```bash
-git clone [your-repo-url]
+git clone [nimishapatil/design-file-search]
 cd design-search
-source clip-env/bin/activate
-cd scripts
-uvicorn main-byom:app --host 127.0.0.1 --port 8000 --reload
+
+# Create and activate virtual environment
+python -m venv clip-env
+source clip-env/bin/activate  # On Windows: clip-env\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### 2. Test It
-Visit: **http://localhost:8000/docs** for interactive documentation
+### 2. Start the API
+```bash
+cd scripts
+python main-byom.py
+```
+
+### 3. Test It
+Visit: **http://localhost:8000/docs** for interactive API documentation
 
 ---
 
 ## ✨ Key Features
 
-- **🔍 Dual Search Modes**: Search with images OR text
+- **🔍 Dual Search Modes**: Search with images OR text queries
 - **📷 Image-to-Image**: Find visually similar images
-- **💬 Text-to-Image**: Search images using natural language
-- **🚀 Batch Upload**: Add multiple images at once
-- **🔧 Multi-Model Support**: Built-in CLIP models + bring your own
-- **⚡ Fast & Reliable**: Load tested for production use
+- **💬 Text-to-Image**: Search images using natural language descriptions
+- **🚀 Batch Operations**: Upload multiple images at once or from URLs
+- **🔧 Multi-Model Support**: Built-in CLIP models + bring your own model endpoints
+- **⚡ Production Ready**: Load tested with monitoring and health checks
+- **🐍 Python Library**: Use directly in Python applications
+- **🌐 REST API**: HTTP endpoints for any programming language
 
 ---
 
-## 📖 Basic Usage
+## 📖 API Usage
+
+### Authentication
+All API requests require an API key in the Authorization header:
+```bash
+-H "Authorization: Bearer demo_key_12345"
+```
 
 ### Create a Collection
 ```bash
@@ -41,20 +59,22 @@ curl -X POST "http://localhost:8000/collections" \
   -H "Authorization: Bearer demo_key_12345" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "My Images",
-    "description": "AI search collection",
+    "name": "My Design Files",
+    "description": "Collection for design assets",
     "model": {"type": "builtin", "name": "clip-vit-base"}
   }'
 ```
 
-### Upload Images (Single)
+### Upload Images
+
+**Single Image:**
 ```bash
 curl -X POST "http://localhost:8000/collections/{collection_id}/images" \
   -H "Authorization: Bearer demo_key_12345" \
   -F "file=@path/to/your/image.jpg"
 ```
 
-### Upload Images (Batch)
+**Batch Upload (Multiple Files):**
 ```bash
 curl -X POST "http://localhost:8000/collections/{collection_id}/images/batch" \
   -H "Authorization: Bearer demo_key_12345" \
@@ -63,30 +83,89 @@ curl -X POST "http://localhost:8000/collections/{collection_id}/images/batch" \
   -F "files=@image3.jpg"
 ```
 
-### Search with Images
+**Batch Upload from URLs:**
+```bash
+curl -X POST "http://localhost:8000/collections/{collection_id}/images/batch-from-urls" \
+  -H "Authorization: Bearer demo_key_12345" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "urls": [
+      "https://example.com/image1.jpg",
+      "https://example.com/image2.jpg"
+    ]
+  }'
+```
+
+### Search
+
+**Search by Image:**
 ```bash
 curl -X POST "http://localhost:8000/collections/{collection_id}/search" \
   -H "Authorization: Bearer demo_key_12345" \
-  -F "file=@query_image.jpg"
+  -F "file=@query_image.jpg" \
+  -F "top_k=5"
 ```
 
-### Search with Text
+**Search by Text:**
 ```bash
 curl -X POST "http://localhost:8000/collections/{collection_id}/search-text" \
   -H "Authorization: Bearer demo_key_12345" \
   -H "Content-Type: application/json" \
-  -d '{"query": "red shoes", "top_k": 5}'
+  -d '{"query": "red logo design", "top_k": 5}'
+```
+
+---
+
+## 🐍 Python Library Usage
+
+Use the library directly in your Python applications:
+
+```python
+from design_search import create_collection, search_images, search_text
+
+# Create a collection
+collection = create_collection("my_designs", model="clip-vit-base")
+
+# Add images
+collection.add_image("design1.jpg")
+collection.add_images(["design2.jpg", "design3.jpg", "design4.jpg"])
+
+# Search by image
+results = search_images(collection, "query_design.jpg", top_k=3)
+for result in results:
+    print(f"{result['filename']}: {result['similarity']:.2f}")
+
+# Search by text
+results = search_text(collection, "minimalist logo", top_k=3)
+for result in results:
+    print(f"{result['filename']}: {result['similarity']:.2f}")
 ```
 
 ---
 
 ## 💻 Code Examples
 
-### Node.js
+### JavaScript/Node.js
 ```javascript
 const FormData = require('form-data');
 
-// Text search
+// Create collection
+async function createCollection(name) {
+  const response = await fetch('http://localhost:8000/collections', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer demo_key_12345',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: name,
+      model: { type: "builtin", name: "clip-vit-base" }
+    })
+  });
+  return response.json();
+}
+
+// Search by text
 async function searchByText(collectionId, query) {
   const response = await fetch(`http://localhost:8000/collections/${collectionId}/search-text`, {
     method: 'POST',
@@ -98,47 +177,11 @@ async function searchByText(collectionId, query) {
   });
   return response.json();
 }
-
-// Image search
-async function searchByImage(collectionId, imageFile) {
-  const formData = new FormData();
-  formData.append('file', imageFile);
-  
-  const response = await fetch(`http://localhost:8000/collections/${collectionId}/search`, {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer demo_key_12345' },
-    body: formData
-  });
-  return response.json();
-}
 ```
 
-### Python
-```python
-import requests
-
-def search_by_text(collection_id, query):
-    response = requests.post(
-        f'http://localhost:8000/collections/{collection_id}/search-text',
-        headers={'Authorization': 'Bearer demo_key_12345'},
-        json={'query': query, 'top_k': 5}
-    )
-    return response.json()
-
-def search_by_image(collection_id, image_path):
-    with open(image_path, 'rb') as f:
-        files = {'file': f}
-        response = requests.post(
-            f'http://localhost:8000/collections/{collection_id}/search',
-            headers={'Authorization': 'Bearer demo_key_12345'},
-            files=files
-        )
-    return response.json()
-```
-
-### React
+### React Component
 ```jsx
-function AISearch({ collectionId }) {
+function VisualSearch({ collectionId }) {
   const [results, setResults] = useState([]);
   const [searchMode, setSearchMode] = useState('text');
 
@@ -178,7 +221,7 @@ function AISearch({ collectionId }) {
       {searchMode === 'text' ? (
         <input 
           type="text" 
-          placeholder="Search for 'red shoes', 'logo', etc."
+          placeholder="Search for 'logo', 'mountain', etc."
           onKeyPress={(e) => e.key === 'Enter' && searchByText(e.target.value)}
         />
       ) : (
@@ -189,11 +232,13 @@ function AISearch({ collectionId }) {
         />
       )}
       
-      {results.map(result => (
-        <div key={result.image_id}>
-          {result.filename} - {(result.similarity * 100).toFixed(1)}% match
-        </div>
-      ))}
+      <div>
+        {results.map(result => (
+          <div key={result.image_id}>
+            {result.filename} - {(result.similarity * 100).toFixed(1)}% match
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -204,10 +249,10 @@ function AISearch({ collectionId }) {
 ## 🔧 Model Options
 
 ### Built-in Models (Free)
-- **clip-vit-base**: Fast, good accuracy (512 dimensions)
-- **clip-vit-large**: Slower, higher accuracy (768 dimensions)
+- **clip-vit-base**: Fast processing, good accuracy (512 dimensions)
+- **clip-vit-large**: Slower processing, higher accuracy (768 dimensions)
 
-### Bring Your Own Model (BYOM)
+### Custom Models (Bring Your Own)
 ```json
 {
   "model": {
@@ -227,8 +272,8 @@ function AISearch({ collectionId }) {
 {
   "results": [
     {
-      "image_id": "uuid",
-      "filename": "product.jpg", 
+      "image_id": "uuid-string",
+      "filename": "design.jpg", 
       "similarity": 0.87,
       "collection_id": "collection-uuid"
     }
@@ -236,7 +281,7 @@ function AISearch({ collectionId }) {
   "total_searched": 25,
   "query_time_ms": 145.2,
   "model_used": "builtin:clip-vit-base",
-  "query_text": "red shoes"
+  "query_text": "red logo design"
 }
 ```
 
@@ -246,13 +291,13 @@ function AISearch({ collectionId }) {
 
 ### Collections
 - `POST /collections` - Create collection with model choice
-- `GET /collections` - List your collections
+- `GET /collections` - List your collections  
 - `DELETE /collections/{id}` - Delete collection
 
 ### Images  
 - `POST /collections/{id}/images` - Upload single image
 - `POST /collections/{id}/images/batch` - Upload multiple images
-- `GET /collections/{id}/images` - List images in collection
+- `POST /collections/{id}/images/batch-from-urls` - Upload from URLs
 
 ### Search
 - `POST /collections/{id}/search` - Search by image similarity
@@ -262,221 +307,114 @@ function AISearch({ collectionId }) {
 - `GET /health` - Health check
 - `GET /models` - Available models
 
-**Full docs**: http://localhost:8000/docs
+**Complete documentation**: http://localhost:8000/docs
 
 ---
 
 ## 💡 Use Cases
 
-### E-commerce
+### Design Tools & Creative Apps
+- **Find similar design components** by uploading a reference
+- **"minimalist logo"** or **"dark theme UI"** with text search
+- **Design system management** and asset organization
+- **Version control** for design iterations
+
+### E-commerce & Product Discovery
 - **"Find similar products"** with image upload
 - **"red dress"** or **"vintage shoes"** with text search
-- **Product discovery** and recommendation engines
+- **Product recommendation** engines
+- **Visual merchandising** tools
 
-### Design Tools
-- **"Find similar logos"** by uploading a design
-- **"minimalist icons"** or **"dark theme UI"** with text
-- **Asset organization** and design system management
-
-### Content Management
+### Content Management & Media
 - **"Find team photos"** or **"product shots"** with text
-- **Similar image detection** for deduplication
-- **Visual content discovery** and organization
+- **Duplicate detection** and content deduplication
+- **Asset library organization** with AI categorization
+- **Stock photo** and media discovery
 
-### Development
-- **"Add visual search"** to any application
+### Development & Integration
+- **Add visual search** to any application via REST API
 - **No ML expertise required** - just HTTP calls
-- **Production-ready** with load testing completed
+- **Multi-language support** - works with any programming language
+- **Production-ready** with authentication and monitoring
 
 ---
 
-## 🚀 Performance
+## 🚀 Performance & Production
 
 - **Response Time**: ~150ms average search time
 - **Concurrent Users**: Tested with 5+ simultaneous users
+- **Load Testing**: Included monitoring and stress testing tools
 - **Scalability**: Ready for production deployment
-- **Reliability**: 100% uptime in load testing
+- **Reliability**: Health checks and error handling
+
+### Load Testing
+```bash
+cd load-testing
+python simple_test.py
+```
+
+### System Monitoring
+```bash
+cd load-testing  
+python monitor.py
+```
+
+---
+
+## 🔄 Development & Testing
+
+### Run Examples
+```bash
+# Python library example
+cd examples/simple_search
+python basic_example.py
+
+# API server example  
+cd examples/api_server
+./start-api.sh
+```
+
+### File Structure
+```
+design-search/
+├── design_search/           # Python library
+│   ├── __init__.py
+│   ├── collections.py       # Collection management
+│   ├── models.py           # Model handling
+│   └── search.py           # Search functions
+├── scripts/                # API server
+│   ├── main-byom.py        # Multi-model API
+│   └── start-api.sh
+├── examples/               # Usage examples
+├── load-testing/           # Performance testing
+└── requirements.txt        # Dependencies
+```
 
 ---
 
 ## 🔑 Authentication
 
-Get your API key by signing up at [your-signup-url]
+Current demo key: `demo_key_12345`
 
-Demo key for testing: `demo_key_12345`
+For production deployment, implement proper API key management and user authentication.
 
 ---
 
-## 🐛 Issues & Feedback
+## 🐛 Issues & Support
 
-Found a bug or have feedback? We'd love to hear from you!
+Found a bug or need help?
 
-- **GitHub Issues**: [Create an issue](https://github.com/your-repo/issues)
+- **Create an issue** on GitHub
 - **Email**: hello@swirlypeak.com
 
 ---
 
-**Ready to add AI-powered search to your app?** Clone the repo and start building!# Visual Search API
+## 🎯 Next Steps
 
-> Find visually similar images using AI embeddings
+1. **Try the demo**: Start the API and visit `/docs`
+2. **Upload test images**: Use the batch upload endpoints
+3. **Test searches**: Try both image and text queries
+4. **Integration**: Add to your application using the code examples
+5. **Production**: Deploy with proper authentication and monitoring
 
-Add image similarity search to your app in minutes. Perfect for design tools, asset management, and creative applications.
-
----
-
-## 🚀 Quick Start
-
-### 1. Start the API
-```bash
-```bash
-git clone [repo-url]
-cd design-search
-source clip-env/bin/activate
-cd scripts
-uvicorn main-byom:app --host 127.0.0.1 --port 8000 --reload
-```
-
-### 2. Test It
-Visit: **http://localhost:8080/docs** for interactive documentation
-
----
-
-## 📖 Basic Usage
-
-### Create a Collection
-```bash
-curl -X POST "http://localhost:8080/collections" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "My Images",
-    "description": "Test collection"
-  }'
-```
-
-### Upload Images
-```bash
-curl -X POST "http://localhost:8080/collections/{collection_id}/images" \
-  -F "file=@path/to/your/image.jpg"
-```
-
-### Search for Similar Images
-```bash
-curl -X POST "http://localhost:8080/collections/{collection_id}/search" \
-  -F "file=@path/to/query/image.jpg"
-```
-
----
-
-## 💻 Code Examples
-
-### Node.js
-```javascript
-const FormData = require('form-data');
-
-async function searchSimilar(collectionId, imageFile) {
-  const formData = new FormData();
-  formData.append('file', imageFile);
-  
-  const response = await fetch(`http://localhost:8080/collections/${collectionId}/search`, {
-    method: 'POST',
-    body: formData
-  });
-  
-  return response.json();
-}
-```
-
-### Python
-```python
-import requests
-
-def search_similar(collection_id, image_path):
-    with open(image_path, 'rb') as f:
-        files = {'file': f}
-        response = requests.post(
-            f'http://localhost:8080/collections/{collection_id}/search',
-            files=files
-        )
-    return response.json()
-```
-
-### React
-```jsx
-function ImageSearch({ collectionId }) {
-  const [results, setResults] = useState([]);
-  
-  const handleUpload = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    const response = await fetch(`/collections/${collectionId}/search`, {
-      method: 'POST',
-      body: formData
-    });
-    
-    const data = await response.json();
-    setResults(data.results);
-  };
-  
-  return (
-    <div>
-      <input type="file" onChange={(e) => handleUpload(e.target.files[0])} />
-      {results.map(result => (
-        <div key={result.image_id}>
-          {result.filename} - {(result.similarity * 100).toFixed(1)}% match
-        </div>
-      ))}
-    </div>
-  );
-}
-```
-
----
-
-## 📊 Response Format
-
-### Search Results
-```json
-{
-  "results": [
-    {
-      "image_id": "uuid",
-      "filename": "design.png", 
-      "similarity": 0.87
-    }
-  ]
-}
-```
-
----
-
-## 🛠️ API Endpoints
-
-- `POST /collections` - Create image collection
-- `POST /collections/{id}/images` - Upload images (max 5MB, JPEG/PNG/WebP)
-- `POST /collections/{id}/search` - Find similar images
-- `GET /health` - Health check
-- `GET /models` – Choose models
-
-**Full docs**: http://localhost:8080/docs
-
----
-
-## 💡 Use Cases
-
-- **Design Tools**: Find similar design components
-- **E-commerce**: "Find similar products" feature  
-- **Asset Management**: Organize media libraries
-- **Content Apps**: Visual content discovery
-
----
-
-## 🐛 Issues & Feedback
-
-Found a bug or have feedback? We'd love to hear from you!
-
-- **Email**: hello@swirlypeak.com
-
----
-
-**Ready to test?** Clone the repo and start experimenting with visual search!
+**Ready to add AI-powered search to your app?** Start with the quick setup guide above!
